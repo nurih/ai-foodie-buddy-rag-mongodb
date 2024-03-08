@@ -1,0 +1,8 @@
+ipywidgets
+datasets
+pandas
+pymongo
+sentence-transformers
+transformers
+# Install below if using GPU
+accelerate
