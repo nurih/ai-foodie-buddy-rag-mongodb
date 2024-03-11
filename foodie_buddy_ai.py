@@ -105,34 +105,37 @@ gemma_model = AutoModelForCausalLM.from_pretrained(
 )
 
 # %%
-# Conduct query with retrival of sources
+# Simulare Q-A cycle:
+
 user_prompt = "Where are the best empanadas that are modern and have really good flavor, and the waiters are extra crispy?"
-user_prompt = "I love me some fried chicken and waffle, with crispy breading and made from scratch, served with **real** maple syrup."
+# user_prompt = "I love me some fried chicken and waffle, with crispy breading and made from scratch, served with **real** maple syrup."
+
+
+print("1. Given a user prompt, perform vector search.")
 
 search_result_documents = vector_search(text_query=user_prompt)
 top_result = search_result_documents[0]
 
-# %%
 # Get info about the restaurant we will use to display later
-print("Restaurant id", top_result["_id"])
+print("The vector search yielded restaurant id", top_result["_id"])
 
 restaurant = restaurants_collection.find_one({"_id": top_result["_id"]})
 
 restaurant and print(restaurant)
 
+print("2. Prompt Engineering: Create an LLM prompt.")
+print("   Use the top restaurant + reviews.")
 llm_prompt = format_llm_prompt(user_prompt, top_result)
 
 print(llm_prompt)
 
-# %%
-
-print("1. Tokenize prompt")
+print("3. Tokenize prompt")
 input_ids = gemma_tokenizer(llm_prompt, return_tensors="pt")
 
-print("2. Use tokens to generate a response represented as a tensor")
+print("4. Use tokens to generate a response represented as a tensor")
 tensore_response: torch.Tensor = gemma_model.generate(**input_ids, max_new_tokens=500)
 
-print("3. Inflate tensor back into human language")
+print("5. Inflate tensor back into human language")
 decoded_response: str = gemma_tokenizer.decode(tensore_response[0])
 
 # The resposne contains the whole LLM prompt, trim it for final display
@@ -142,5 +145,7 @@ print("*" * 64)
 print("Original User Prompt was:")
 print(user_prompt)
 print("*" * 64)
-print("RAG Generated response was:")
+
+print("6. RAG Generated response was:")
+
 print(opinion_portion)
