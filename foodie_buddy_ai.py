@@ -1,78 +1,90 @@
 # %%
-%pip install datasets pandas pymongo sentence-transformers
-%pip install -U transformers
-# Install below if using GPU
-%pip install accelerate
-%pip install ipywidgets
-
-# %%
-from pathlib import Path
 from datasets import load_dataset
+from huggingface_hub import notebook_login
+from pathlib import Path
+from pymongo import MongoClient, collection
+from sentence_transformers import SentenceTransformer, util
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import json
+import os
 import pandas as pd
 
-ATLAS_DB = 'demo'
-ATLAS_DB_COLLECTION = 'mflix_ai'
-ATLAS_VECTOR_INDEX = 'vector_index'
-DOCUMENT_EMBEDDINGS_FIELD = 'embedding'
-
-ORIG_DF_CACHE = "./.cache/original_dataset.csv"
-
-if Path(ORIG_DF_CACHE).exists():
-    dataset_df = pd.read_csv(ORIG_DF_CACHE)
-else:
-    # https://huggingface.co/datasets/AIatMongoDB/embedded_movies
-    dataset = load_dataset("AIatMongoDB/embedded_movies")
-
-    # Create Pandas data frame from dataset
-    dataset_df = pd.DataFrame(dataset["train"])[["fullplot", "title", "rated", "genres", "runtime", "plot"]]
-    dataset_df.to_csv(ORIG_DF_CACHE)
-
+ATLAS_DB = "demo"
+ATLAS_DB_COLLECTION = "restaurant_reviews"
+ATLAS_DB_RESTAURANTS_COLLECTION = "restaurant"
+ATLAS_VECTOR_INDEX = "restaurant_reviews_index"
+DOCUMENT_EMBEDDINGS_FIELD = "embedding"
+REVIEWS_DIR = Path(os.environ.get("USERPROFILE")).joinpath(
+    "Downloads", "restaurant_dataset"
+)
 
 # %%
-# Data Preparation
+# Reviews dataset
+reviews_df = pd.read_json(REVIEWS_DIR.joinpath("reviews.json"), lines=True)
+reviews_df.rename(columns={"user_id": "_id"}, inplace=True)
+reviews_df.info()
+
+# %%
+# Cleanup reviews dataset
 
 # Embedding generation breaks on null/ missing text. Drop it.
-dataset_df = dataset_df.dropna(subset=["fullplot"])
-print("Null data in columns", dataset_df.isnull().sum())
+reviews_df = reviews_df.dropna(subset=["text"])
+print("Null data in columns")
+print(reviews_df.isnull().sum())
+
+reviews_df.drop_duplicates(subset="_id", inplace=True)
+print("Unique _id sanity check", len(reviews_df._id.unique()), len(reviews_df._id))
+
+reviews_df["_id"] = reviews_df["_id"].astype("str")
+reviews_df.info()
 
 # %%
-from sentence_transformers import SentenceTransformer, util
+restuaurants_df = pd.read_json(REVIEWS_DIR.joinpath("restaurants.json"), lines=True)
+restuaurants_df.rename(columns={"gmap_id": "_id"}, inplace=True)
+restuaurants_df.info()
 
-embedding_model = SentenceTransformer("thenlper/gte-large")
+
+# %%
+gte_large_model = SentenceTransformer("thenlper/gte-large")
 asymmetric_model = SentenceTransformer(
     "sentence-transformers/msmarco-distilroberta-base-v2"
 )
 multi_qa_minilm_ls_cos = SentenceTransformer("multi-qa-MiniLM-L6-cos-v1")
 
 # %%
-# Create an embedding (a vector) from text
+# Function to create an embedding (a vector) from text
 
 ## Choose one of the embedding models:
-# embedder = lambda text: embedding_model.encode(text)
+# embedder = lambda text: gte_large_model.encode(text)
 # embedder = lambda text: asymmetric_model.encode(text)
 embedder = lambda text: multi_qa_minilm_ls_cos.encode(text)
+
 
 def get_embedding_vector(text: str | list[str]) -> list[float]:
     if not text.strip():
         raise ValueError("Attempted to get embedding for empty text.")
-    
+
     result = embedder(text).tolist()
 
     return result
 
-EMBEDDING_LENGTH = len(get_embedding_vector('some text'))
+
+EMBEDDING_LENGTH = len(get_embedding_vector("some text"))
 print(f"embedding length {EMBEDDING_LENGTH}")
 print(f"destination field {DOCUMENT_EMBEDDINGS_FIELD}")
 print(f"*** Create the following vector index in Atlas Search: ***")
 print(f"1. Database '{ATLAS_DB}'")
 print(f"2. Collection '{ATLAS_DB_COLLECTION}'")
 print(f"3. Index name '{ATLAS_VECTOR_INDEX}':")
-print(f'4. Index JSON:\n\t{{"fields": [{{"numDimensions": {EMBEDDING_LENGTH},"path": "{DOCUMENT_EMBEDDINGS_FIELD}","similarity": "cosine","type": "vector"}}]}}')
+print(
+    f'4. Index JSON:\n\t{{"fields": [{{"numDimensions": {EMBEDDING_LENGTH},"path": "{DOCUMENT_EMBEDDINGS_FIELD}","similarity": "cosine","type": "vector"}},{{"type": "filter","path": "rating"}}]}}'
+)
 
 # %%
 # Measure embedding_model's embedding nuance
 
-prompt = "Chances of anything coming to earth"
+prompt = "Chances of anything coming from Mars?"
 data = [
     "The American approach to everything is Go Big or Go Home!",
     "When it comes to pizza, cover it in cheese completely.",
@@ -81,7 +93,7 @@ data = [
 
 print(
     "embedding_model:",
-    util.cos_sim(embedding_model.encode(prompt), embedding_model.encode(data)),
+    util.cos_sim(gte_large_model.encode(prompt), gte_large_model.encode(data)),
 )
 
 print(
@@ -97,23 +109,24 @@ print(
 )
 
 # %%
-EMBEDDINGS_DF_CACHE = './.cache/embeddings_dataset.csv'
-
+EMBEDDINGS_DF_CACHE = "./.cache/embeddings_dataset.csv"
 
 if Path(EMBEDDINGS_DF_CACHE).exists():
-  dataset_df = pd.read_csv(EMBEDDINGS_DF_CACHE)
-else:
-  # This can take some time...
-  dataset_df[DOCUMENT_EMBEDDINGS_FIELD] = dataset_df["fullplot"].apply(get_embedding_vector)
-  dataset_df.to_csv(EMBEDDINGS_DF_CACHE)
+    reviews_df = pd.read_csv(EMBEDDINGS_DF_CACHE)
+    if "Unnamed: 0" in reviews_df.columns:
+        reviews_df.drop("Unnamed: 0", axis=1, inplace=True)
+        print("Extra column dropped....")
 
-dataset_df.info()
+else:
+    print("Generating embeddings... this can take some time...")
+    reviews_df[DOCUMENT_EMBEDDINGS_FIELD] = reviews_df["text"].apply(
+        get_embedding_vector
+    )
+    reviews_df.to_csv(EMBEDDINGS_DF_CACHE, index=False)
+
+reviews_df.info()
 
 # %%
-from pymongo import MongoClient, collection
-import os
-
-# from google.colab import userdata
 
 MONGO_URI = os.environ.get("MONGO_URL")
 
@@ -124,22 +137,39 @@ if not MONGO_URI:
 mongo_client = MongoClient(MONGO_URI)
 print("Connection to MongoDB successful")
 
-atlas_collection: collection = mongo_client[ATLAS_DB][ATLAS_DB_COLLECTION]
+reviews_collection: collection = mongo_client[ATLAS_DB][ATLAS_DB_COLLECTION]
+restaurants_collection: collection = mongo_client[ATLAS_DB][
+    ATLAS_DB_RESTAURANTS_COLLECTION
+]
+
 
 # %%
-# Delete any existing records in the collection
-atlas_collection.delete_many({})
+
+
+def upload_to_mongo(mongo_collection, documents, batch_size=1000):
+    print(
+        f"Inserting {len(documents)} into {mongo_collection.database.name}.{mongo_collection.name}"
+    )
+
+    for i in range(0, len(documents), batch_size):
+        insert_result = mongo_collection.insert_many(
+            documents[i : i + batch_size],
+            ordered=False,
+        )
+
+        print(f"Inserted batch # {i+1}." + insert_result)
+
 
 # %%
-documents = dataset_df.to_dict("records")
-insert_result = atlas_collection.insert_many(
-    documents,
-    ordered=False,
-)
+reviews_collection.delete_many({})
+review_documents = reviews_df.to_dict("records")
+upload_to_mongo(reviews_collection, review_documents)
 
-print(
-    f"Inserted into {ATLAS_DB}.{ATLAS_DB_COLLECTION} {len(insert_result.inserted_ids)} documents."
-)
+# %%
+restaurants_collection.delete_many({})
+restuaurant_documents = restuaurants_df.to_dict("records")
+upload_to_mongo(restaurants_collection, restuaurant_documents)
+
 
 # %%
 def format_mql_query(embedding_of_query: list):
@@ -149,25 +179,34 @@ def format_mql_query(embedding_of_query: list):
                 "index": ATLAS_VECTOR_INDEX,
                 "queryVector": embedding_of_query,
                 "path": DOCUMENT_EMBEDDINGS_FIELD,
-                "numCandidates": 150,  # Number of candidate matches to consider
-                "limit": 4,  # Return top 4 matches
+                "numCandidates": 150,
+                "limit": 100,
+                "filter": {"rating": {"$gte": 3}},
             }
         },
         {
             "$project": {
-                "_id": 0,  # Exclude the _id field
-                "fullplot": 1,  # Include the plot field
-                "title": 1,  # Include the title field
-                "genres": 1,  # Include the genres field
-                "score": {"$meta": "vectorSearchScore"},  # Include the search score
+                "text": 1,  # review  field
+                "name": 1,  # reviewer field
+                "gmap_id": 1,  # locator for restaurant
+                "score": {"$meta": "vectorSearchScore"},  # score
             }
         },
+        {
+            "$group": {
+                "_id": "$gmap_id",
+                "reviews": {"$push": {"by": "$name", "text": "$text"}},
+                "n": {"$count": {}},
+            }
+        },
+        {"$sort": {"n": -1}},
+        {"$limit": 1},
     ]
 
     return mql_pipeline
 
+
 # %%
-import json
 
 
 def vector_search(text_query: str):
@@ -190,53 +229,74 @@ def vector_search(text_query: str):
     with open(".cache/mql_pipeline.json", "w", encoding="utf8") as f:
         f.write(json.dumps(mql_pipeline, indent=None))
 
-    results = atlas_collection.aggregate(mql_pipeline)
+    results = reviews_collection.aggregate(mql_pipeline)
 
     return list(results)
 
-# %%
-def combine_results_to_text(documents: list[dict]) -> str:
-    result_as_text = ""
-    for doc in documents:
-        result_as_text += (
-            f"Title: {doc.get('title', 'N/A')}\nPlot: {doc.get('fullplot', 'N/A')}\n\n"
-        )
 
-    return result_as_text
+# %%
+
+
+def format_llm_prompt(user_prompt: str, top_result) -> str:
+    """Formats user query + Atlas Vector results
+    into a usable prompt for LLM to create final answer.
+
+    user_prompt: the query from the user
+
+    top_result: The response document from querying mongo, which contains reviews for a single place
+    """
+    reviews_to_consider = "\n\n".join(
+        [json.dumps(r) for r in top_result["reviews"][:4]]
+    )
+
+    llm_prompt = f"Write a restaurant review based on the question and reviews provieded below. Write why a person would love to eat there.\nQuery: {user_prompt}\nContinue to answer the query by using these actual reviews:\n\n{reviews_to_consider}."
+
+    return llm_prompt
+
+# %%
+
+ANSWER_GENERATION_LLM = "google/gemma-2b-it"
+gemma_tokenizer = AutoTokenizer.from_pretrained(ANSWER_GENERATION_LLM)
+gemma_model = AutoModelForCausalLM.from_pretrained(
+    ANSWER_GENERATION_LLM, device_map="auto"
+)
 
 # %%
 # Conduct query with retrival of sources
-text_query = "I feel like aliens are watching are visiting. What movie is about this?"
+user_prompt = "Where are the best empanadas that are modern and have really good flavor, and the waiters are extra crispy?"
+user_prompt = "Who has scruptious fried birds served with some pastry? I want real maple syrup."
 
-search_result_documents = vector_search(text_query=text_query)
+search_result_documents = vector_search(text_query=user_prompt)
+top_result = search_result_documents[0]
 
-candidate_items_to_reccomend = combine_results_to_text(search_result_documents)
+#%%
+# Get info about the restaurant we will use to display later
+print('Restaurant id' ,top_result['_id'])
 
-combined_information = f"Query: {text_query}\nContinue to answer the query by using the Search Results:\n{candidate_items_to_reccomend}."
+restaurant = restaurants_collection.find_one({'_id': top_result['_id']})
 
-print(combined_information)
+restaurant and print(restaurant) 
 
-# %%
-from huggingface_hub import notebook_login
-notebook_login()
+llm_prompt = format_llm_prompt(user_prompt, top_result)
 
-# %%
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
-gemma_tokenizer = AutoTokenizer.from_pretrained("google/gemma-2b-it")
-gemma_model = AutoModelForCausalLM.from_pretrained("google/gemma-2b-it", device_map="auto")
-
-# %%
-# Set up a one-shot query to generate an opinion
-generation_prompt = f"Pick one of these 3 movies at random, and write who would love to see that movie.\n{candidate_items_to_reccomend}"
-
+print(llm_prompt)
 
 # %%
 
-input_ids = gemma_tokenizer(generation_prompt, return_tensors="pt")
+print("1. Tokenize prompt")
+input_ids = gemma_tokenizer(llm_prompt, return_tensors="pt")
 
-response = gemma_model.generate(**input_ids, max_new_tokens=500)
+print("2. Use tokens to generate a response represented as a tensor")
+tensore_response: torch.Tensor = gemma_model.generate(**input_ids, max_new_tokens=500)
 
-print(gemma_tokenizer.decode(response[0]))
+print("3. Inflate tensor back into human language")
+decoded_response: str = gemma_tokenizer.decode(tensore_response[0])
 
+# resposne contains original prompt, so trim it for final result
+opinion_portion = decoded_response.replace(
+    llm_prompt, "<<generation prompt redacted>>"
+)[5:]
 
+print("*" * 32)
+print("Here's what we figured:")
+print(opinion_portion)
