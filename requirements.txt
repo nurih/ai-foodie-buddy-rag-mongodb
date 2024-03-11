@@ -7,3 +7,4 @@ transformers
 # Install below if using GPU
 accelerate
 huggingface_hub
+optimum[openvino,nncf,ipex]

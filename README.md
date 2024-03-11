@@ -22,3 +22,20 @@ Restaurant meta data and corresponding reviews were loaded from source files pro
 The data is based on Google Local Data (2021), in a webpage by Tianyang Zhang, UCSD and Jiacheng Li, UCSD.
 
 The data for a demo was prepared based on the Hawaii datasets for restaurant locations and reviews of those restaurants, further narrowed to places with 10 or more reviews and reviews that have a text length above 32 characters. This is under the theory that "Yay", and "Awesome", or "Garbage" represents a sentiment, but does little to describe the reasoning and therefore not helpful.
+
+## Python and local environment
+
+If you run on an Intel laptop with Iris or other supported GPU, and environment with OpenVino can help speed things up a lot.
+
+You will need to choose if to use OpenVino or the "vanilla" models, by instantiating the right wrapper:
+
+Vanilla model | OpenVino optimized
+--- | ---
+`AutoModelForCausalLM.from_pretrained()` | `OVModelForCausalLM.from_pretrained('model-name', export=True)`
+
+For that to work, you will need to consult and install the proper libraries
+
+```shell
+pip install --upgrade-strategy eager "optimum[openvino,nncf]"
+pip install --upgrade-strategy eager "optimum[ipex]"
+```
