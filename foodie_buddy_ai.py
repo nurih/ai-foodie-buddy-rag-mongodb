@@ -1,9 +1,7 @@
 # %%
-from huggingface_hub import notebook_login
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
 import json
 from embedder import MULTI_QA_MINILM_L6_COS_V1, Embedder
+from llm_predictor import LlmPredictor
 from settings import ATLAS_VECTOR_INDEX, DOCUMENT_EMBEDDINGS_FIELD
 
 from mongo_atlas import restaurants_collection, reviews_collection
@@ -91,24 +89,15 @@ def format_llm_prompt(user_prompt: str, top_result) -> str:
 
     return llm_prompt
 
-
-# %%
-import torch
-
-# from optimum.intel import AutoModelForCausalLM
-
-ANSWER_GENERATION_LLM = "google/gemma-2b-it"
-
-gemma_tokenizer = AutoTokenizer.from_pretrained(ANSWER_GENERATION_LLM)
-gemma_model = AutoModelForCausalLM.from_pretrained(
-    ANSWER_GENERATION_LLM, device_map="auto"
-)
-
 # %%
 # Simulare Q-A cycle:
 
-user_prompt = "Where are the best empanadas that are modern and have really good flavor, and the waiters are extra crispy?"
 # user_prompt = "I love me some fried chicken and waffle, with crispy breading and made from scratch, served with **real** maple syrup."
+# user_prompt = "Where are the best empanadas that are modern and have really good flavor, and the waiters are extra crispy?"
+
+llm_predictor = LlmPredictor().use_api_vertex_ai()
+
+user_prompt = "Find me the best Spam musubi that locals go to and is a hidden gem."
 
 
 print("1. Given a user prompt, perform vector search.")
@@ -127,25 +116,20 @@ print("2. Prompt Engineering: Create an LLM prompt.")
 print("   Use the top restaurant + reviews.")
 llm_prompt = format_llm_prompt(user_prompt, top_result)
 
+with open('./.cache/llm_prompt.txt', 'w') as lph:
+    lph.write(llm_prompt)
+    
 print(llm_prompt)
 
-print("3. Tokenize prompt")
-input_ids = gemma_tokenizer(llm_prompt, return_tensors="pt")
+print("3. Use the LLM prediction engine of choice")
 
-print("4. Use tokens to generate a response represented as a tensor")
-tensore_response: torch.Tensor = gemma_model.generate(**input_ids, max_new_tokens=500)
+generated_text = llm_predictor.predict(llm_prompt)
 
-print("5. Inflate tensor back into human language")
-decoded_response: str = gemma_tokenizer.decode(tensore_response[0])
-
-# The resposne contains the whole LLM prompt, trim it for final display
-opinion_portion = decoded_response.replace(llm_prompt, "")[5:]
-
+print("4. Process complete")
 print("*" * 64)
 print("Original User Prompt was:")
 print(user_prompt)
 print("*" * 64)
+print(generated_text)
 
-print("6. RAG Generated response was:")
-
-print(opinion_portion)
+# %%

@@ -31,6 +31,7 @@ File | Purpose
 --- | ---
 `foodie_buddy_ai.py` | **Main program**. Demonstrates RAG architecture in practice
 `embedder.py` | Utility that wraps an embedding model to generate embeddings for data preparation as well as for live query encoding.
+`llm_predictor.py` | Utility that wraps a Large Language Model (LLM) to use for the text predictions
 `mongo_atlas.py` | Shared mongo code, instances of pre-connected collection handles
 `reviews_extractor.py` | Utility that processes original raw data, making it read for use with Atlas vector search index
 `reviews_uploader.py` | Utility that uploads data from files to MongoDB Atlas

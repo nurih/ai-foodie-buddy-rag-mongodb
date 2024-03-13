@@ -9,3 +9,5 @@ DOCUMENT_EMBEDDINGS_FIELD = "embedding"
 REVIEWS_DIR = Path(os.environ.get("USERPROFILE")).joinpath(
     "Downloads", "restaurant_dataset"
 )
+
+LLM_PROMPT_CACHE = "./.cache/llm_prompt.txt"
