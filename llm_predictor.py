@@ -1,3 +1,4 @@
+from enum import StrEnum
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import vertexai
@@ -10,9 +11,19 @@ from settings import LLM_PROMPT_CACHE
 GEMMA = "google/gemma-2b-it"
 
 
+class VertexModel(StrEnum):
+    TEXT_BISON = "text-bison@002"
+    TEXT_UNICORN = "text-unicorn@001"
+
+
 class LlmPredictor:
 
-    def use_api_vertex_ai(self, gcp_project: str = None, gcp_location: str = None):
+    def use_api_vertex_ai(
+        self,
+        model_name: str = VertexModel.TEXT_BISON,
+        gcp_project: str = None,
+        gcp_location: str = None,
+    ):
 
         print("Using Vertex AI for prediction", vertexai.aiplatform_version.__version__)
 
@@ -29,14 +40,14 @@ class LlmPredictor:
         # Initialize vertexai
         vertexai.init(project=gcp_project, location=gcp_location)
 
-        self._generate = _generate_using_vertex_ai
+        self._generate = lambda prompt: _predict_vertex_ai(prompt, model_name)
 
         return self
 
     def use_local_gemma(self):
 
         print("Using Gemma local model")
-        
+
         print("Loading tokenizer")
 
         tokenizer = AutoTokenizer.from_pretrained(GEMMA)
@@ -45,14 +56,14 @@ class LlmPredictor:
 
         model = AutoModelForCausalLM.from_pretrained(GEMMA, device_map="auto")
 
-        self._generate = lambda prompt: _generate_using_gemma(prompt, tokenizer, model)
+        self._generate = lambda prompt: _predict_gemma(prompt, tokenizer, model)
         return self
 
     def predict(self, prompt):
         return self._generate(prompt)
 
 
-def _generate_using_gemma(llm_prompt: str, tokenizer, model) -> str:
+def _predict_gemma(llm_prompt: str, tokenizer, model) -> str:
 
     # tokenize prompt
     input_ids = tokenizer(llm_prompt, return_tensors="pt")
@@ -69,7 +80,7 @@ def _generate_using_gemma(llm_prompt: str, tokenizer, model) -> str:
     return result
 
 
-def _generate_using_vertex_ai(prompt: str) -> str:
+def _predict_vertex_ai(prompt: str, model_name: str) -> str:
     parameters = {
         "temperature": 0.17,
         "max_output_tokens": 160,
@@ -77,7 +88,7 @@ def _generate_using_vertex_ai(prompt: str) -> str:
         "top_k": 40,
     }
 
-    model = language_models.TextGenerationModel.from_pretrained("text-bison@002")
+    model = language_models.TextGenerationModel.from_pretrained(model_name)
 
     response = model.predict(
         prompt,
@@ -88,7 +99,8 @@ def _generate_using_vertex_ai(prompt: str) -> str:
 
 if __name__ == "__main__":
 
-    llm = LlmPredictor().use_api_vertex_ai()
+    llm = LlmPredictor().use_api_vertex_ai(model_name=VertexModel.TEXT_BISON)
+    llm = LlmPredictor().use_api_vertex_ai(model_name=VertexModel.TEXT_UNICORN)
     # llm = LlmOneShot().use_local_gemma()
 
     prompt = open(LLM_PROMPT_CACHE, "r").read()
