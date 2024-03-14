@@ -85,7 +85,7 @@ def format_llm_prompt(user_prompt: str, top_result) -> str:
         [json.dumps(r) for r in top_result["reviews"][:4]]
     )
 
-    llm_prompt = f"Write a restaurant review based on the question and reviews provieded below. Write why a person would love to eat there.\nQuery: {user_prompt}\nContinue to answer the query by using these actual reviews:\n\n{reviews_to_consider}."
+    llm_prompt = f"Write a restaurant review based on the question and reviews provided below. Write why a person would love to eat there.\nQuery: {user_prompt}\nContinue to answer the query by using these actual reviews:\n\n{reviews_to_consider}."
 
     return llm_prompt
 
