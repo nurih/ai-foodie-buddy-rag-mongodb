@@ -1,3 +1,4 @@
+
 # Restaurant Recommendations with AI and RAG architecture
 
 This repo showcases using RAG architecture to produce a reasoned recommendation in response to a user prompt.
@@ -8,7 +9,7 @@ This repo showcases using RAG architecture to produce a reasoned recommendation 
 
 ### Embedding
 
-For the sake of speed, the using [the sentence transformer multi-qa-MiniLM-L6-cos-v1](<https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1#multi-qa-minilm-l6-cos-v1>) performed well on a local machine using CPU only. The embedding vector length is only 384.
+For the sake of speed, using [the sentence transformer multi-qa-MiniLM-L6-cos-v1](<https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1#multi-qa-minilm-l6-cos-v1>), which performed well on a local machine using CPU only. The embedding vector length is only 384.
 
 > :notebook: Changing to a different sentence transformer can yield different results during the retrieval stage of the RAG. YMMV.
 
@@ -42,7 +43,7 @@ The data for a demo was prepared based on the Hawaii datasets for restaurant loc
 
 If you run on an Intel laptop with Iris or other supported GPU, and environment with OpenVino can help speed things up a lot.
 
-You will need to choose if to use OpenVino or the "vanilla" models, by instantiating the right wrapper:
+You will need to choose whether to use OpenVino or the "vanilla" models, by instantiating the right wrapper:
 
 | Vanilla model                            | OpenVino optimized                                              |
 |------------------------------------------|-----------------------------------------------------------------|
