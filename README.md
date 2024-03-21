@@ -27,15 +27,15 @@ The data for a demo was prepared based on the Hawaii datasets for restaurant loc
 
 ## What's in This Repo?
 
-| File                   | Purpose                                                                                                               |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| `foodie_buddy_ai.py`   | **Main program**. Demonstrates RAG architecture in practice                                                           |
-| `embedder.py`          | Utility that wraps an embedding model to generate embeddings for data preparation as well as for live query encoding. |
-| `llm_predictor.py`     | Utility that wraps a Large Language Model (LLM) to use for the text predictions                                       |
-| `mongo_atlas.py`       | Shared Mongo code, instances of pre-connected collection handles                                                      |
-| `reviews_extractor.py` | Utility that processes original raw data, making it read for use with Atlas vector search index                       |
-| `reviews_uploader.py`  | Utility that uploads data from files to MongoDB Atlas                                                                 |
-| `settings.py`          | Shared settings / constants                                                                                           |
+| File | Purpose|
+|:----|:----|
+| `foodie_buddy_ai.py` | **Main program**. Demonstrates RAG architecture in practice |
+| `embedder.py` | Utility that wraps an embedding model to generate embeddings for data preparation as well as for live query encoding. |
+| `llm_predictor.py` | Utility that wraps a Large Language Model (LLM) to use for the text predictions |
+| `mongo_atlas.py` | Shared Mongo code, instances of pre-connected collection handles |
+| `reviews_extractor.py` | Utility that processes original raw data, making it read for use with Atlas vector search index |
+| `reviews_uploader.py`  | Utility that uploads data from files to MongoDB Atlas |
+| `settings.py` | Shared settings / constants |
 
 ## Python and local environment
 
@@ -45,8 +45,8 @@ If you run on an Intel laptop with Iris or other supported GPU, and environment 
 
 You will need to choose whether to use OpenVino or the "vanilla" models, by instantiating the right wrapper:
 
-| Vanilla model                            | OpenVino optimized                                              |
-|------------------------------------------|-----------------------------------------------------------------|
+| Vanilla model| OpenVino optimized|
+|:----|:----|
 | `AutoModelForCausalLM.from_pretrained()` | `OVModelForCausalLM.from_pretrained('model-name', export=True)` |
 
 For that to work, you will need to consult and install the proper libraries
