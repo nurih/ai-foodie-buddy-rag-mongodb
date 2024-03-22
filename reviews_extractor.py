@@ -28,11 +28,11 @@ BUSINESS_KEYS = [
 max_lines = 1000000
 written = 0
 with open(BUSINESSES_RAW, "r", encoding="utf8") as source_file:
-    for line in source_file:
-        with open(
-            BUSINESSES_SLIM, "a", buffering=1, encoding="utf8"
+    with open(
+            BUSINESSES_SLIM, "w", buffering=1, encoding="utf8"
         ) as destination_file:
-            if "Restaurant" in line:
+        for line in source_file:
+            if "estaurant" in line:
                 original = json.loads(line)
                 slim = {k: v for k, v in original.items() if k in BUSINESS_KEYS}
                 destination_file.write(json.dumps(slim))
@@ -42,7 +42,6 @@ with open(BUSINESSES_RAW, "r", encoding="utf8") as source_file:
                     print(f"{written}", end=" ")
                 if written >= max_lines:
                     break
-
 
 # %%
 
