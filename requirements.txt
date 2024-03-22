@@ -9,3 +9,4 @@ accelerate
 huggingface_hub
 optimum[openvino,nncf,ipex]
 google-cloud-aiplatform
+prompt_toolkit
