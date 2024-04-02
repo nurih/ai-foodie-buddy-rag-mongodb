@@ -1,5 +1,5 @@
 import json
-from prompt_toolkit.shortcuts import input_dialog, yes_no_dialog, message_dialog
+from prompt_toolkit.cursor_shapes import CursorShape
 from prompt_toolkit import print_formatted_text as print, prompt
 from prompt_toolkit import HTML
 from sentence_transformers import SentenceTransformer
@@ -24,6 +24,7 @@ transformer = None
 
 def answer_my_question(user_question: str):
 
+    # The transformer used to create an embedding
     transformer = SentenceTransformer("multi-qa-MiniLM-L6-cos-v1")
     token_count = 384
 
@@ -31,11 +32,13 @@ def answer_my_question(user_question: str):
 
     say(f"Embedding {user_question_embedding[0]}... ({token_count} items)")
 
+    # Query for MongoDB Atlas vector search
     mql_pipeline = format_mql_query(user_question_embedding)
 
-    if confirm("Print the query?"):
+    if confirm("Print the Atlas MongoDB vector search query? "):
         say(f"{json.dumps(mql_pipeline, indent=2)}")
 
+    # perform vector search (the R in RAG)
     mongo_client = MongoClient(MONGO_URI)
 
     reviews_collection: collection = mongo_client[ATLAS_DB][ATLAS_DB_COLLECTION]
@@ -44,29 +47,34 @@ def answer_my_question(user_question: str):
 
     top_restaurant = list(verctor_search_result)[0]
 
-    if confirm("Print the vector search result?"):
+    if confirm("Print the Atlas vector search result document(s)? "):
         say(top_restaurant)
 
+    # Engineer a one-shot prompt (the A in RAG)
     llm_prompt = format_llm_prompt(user_question, top_restaurant)
 
-    if confirm("Print llm prompt given to Vertex API?"):
+    if confirm("Print llm prompt given to Vertex API? "):
         say(llm_prompt)
 
+    # Execute the prompt against a pre-built model (The G in RAG)
     generative_prediction_parameters = {
-        "temperature": 0.17,
-        "max_output_tokens": 160,
+        "temperature": 0.14,
+        "max_output_tokens": 180,
         "top_p": 0.86,
         "top_k": 40,
     }
 
     model = language_models.TextGenerationModel.from_pretrained("text-bison@002")
+    
 
     response = model.predict(
         prompt=llm_prompt,
         **generative_prediction_parameters,
     )
 
-    print(HTML(f"<p><violet><i>{response.text}</i></violet></p>"))
+    print(HTML(f"<b><u><yellow>Generated Reccomendation:</yellow></u></b>"))
+
+    print(response.text)
 
 
 def format_mql_query(embedding_of_query: list):
@@ -76,8 +84,8 @@ def format_mql_query(embedding_of_query: list):
                 "index": ATLAS_VECTOR_INDEX,
                 "queryVector": embedding_of_query,
                 "path": DOCUMENT_EMBEDDINGS_FIELD,
-                "numCandidates": 150,
-                "limit": 100,
+                "numCandidates": 180,
+                "limit": 120,
                 "filter": {"rating": {"$gte": 3}},
             }
         },
@@ -89,11 +97,14 @@ def format_mql_query(embedding_of_query: list):
                 "score": {"$meta": "vectorSearchScore"},  # score
             }
         },
+        {"$match": {"$expr": {"$gt": [{"$strLenCP": "$text"}, 100]}}},
         {
             "$group": {
                 "_id": "$gmap_id",
                 "reviews": {"$push": {"by": "$name", "text": "$text"}},
                 "n": {"$count": {}},
+                "max_score": {"$max": "$score"},
+                "avg_score": {"$avg": "$score"},
             }
         },
         {"$sort": {"n": -1}},
@@ -108,7 +119,7 @@ def format_llm_prompt(user_prompt: str, best_match) -> str:
         [json.dumps(r) for r in best_match["reviews"][:10]]
     )
 
-    llm_prompt = f"Write a restaurant reccomendation based on the Query and the provided Reviews only. Elaborate why I would love this place.\nQuery: {user_prompt}\nReviews: {reviews_to_consider}."
+    llm_prompt = f"Summarize these reccomendations to tell me why I should go to the restaurant given my criteria\nCriteria: {user_prompt}\nReviews: {reviews_to_consider}."
 
     return llm_prompt
 
@@ -125,14 +136,19 @@ def prep_vertex_ai():
     # Initialize vertexai
     vertexai.init(project=gcp_project, location=gcp_location)
 
+    print(gcp_project, gcp_location)
+
 
 def say(text: str):
-    print(HTML("<hr/>"))
+    print(HTML("<p>\t</p>"))
     print(text)
 
 
 def confirm(text) -> bool:
-    return prompt(text + "  ") in ["Y", "y"]
+    return prompt(
+        HTML(f"<ansicyan><b><u>{text}</u></b></ansicyan>"),
+        cursor=CursorShape.BLINKING_BLOCK,
+    ) in ["Y", "y"]
 
 
 from prompt_toolkit.application import get_app
@@ -142,14 +158,15 @@ if __name__ == "__main__":
     prep_vertex_ai()
 
     while True:
-        # user_question = input_dialog(
-        #     title="User Question", text="Tell me about your ideal food"
-        # ).run()
 
-        user_question = prompt("Tell me about your ideal food experience:")
+        user_question = prompt(
+            HTML(
+                "<ansiblue><u><b>What food adventure do you seek?: </b></u></ansiblue>"
+            )
+        )
 
         answer_my_question(user_question)
 
-        if not confirm("Go again?"):
-            print(HTML("<ansigreen><b>Bye!</b></ansigreen>"))
+        if not confirm("Go again? "):
+            print(HTML("<ansiblue><b>Bye!</b></ansiblue>"))
             break
