@@ -119,7 +119,7 @@ def format_llm_prompt(user_prompt: str, best_match) -> str:
         [json.dumps(r) for r in best_match["reviews"][:10]]
     )
 
-    llm_prompt = f"Summarize these reccomendations to tell me why I should go to the restaurant given my criteria\nCriteria: {user_prompt}\nReviews: {reviews_to_consider}."
+    llm_prompt = f"Summarize these reccomendations to tell me why I should go to the restaurant given my criteria.\n\nCriteria: {user_prompt}\nReviews: {reviews_to_consider}."
 
     return llm_prompt
 
